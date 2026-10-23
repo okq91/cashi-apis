@@ -1,0 +1,1113 @@
+{
+  "info": {
+    "name": "Cashi API - Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Self-contained test suite. Run the whole collection with the Collection Runner (or `postman collection run`) in order: it registers a fresh user, exercises success and error cases for every endpoint, and fills `authorization` (Bearer token) from the register/login/refresh responses."
+  },
+  "item": [
+    {
+      "name": "1. Auth",
+      "item": [
+        {
+          "name": "Register - success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"fullName\": \"Test User\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Fresh user on every run so the suite is repeatable",
+                  "pm.collectionVariables.set('email', 'user-' + Date.now() + '@example.com');",
+                  "pm.collectionVariables.set('seeded', '');",
+                  "pm.collectionVariables.set('cursor', '');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('Returns user and both tokens', () => {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "    pm.expect(data.user.fullName).to.eql('Test User');",
+                  "    pm.expect(data.tokenType).to.eql('Bearer');",
+                  "    pm.expect(data.expiresIn).to.be.above(0);",
+                  "    pm.expect(data.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.refreshToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data).to.not.have.property('passwordHash');",
+                  "});",
+                  "",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "pm.collectionVariables.set('authorization', data.tokenType + ' ' + data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register - duplicate email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\",\n  \"fullName\": \"Test User\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 409', () => pm.response.to.have.status(409));",
+                  "",
+                  "pm.test('Error body has status 409 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(409);",
+                  "    pm.expect(body.message).to.eql(\"Email is already registered\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Register - invalid body",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "register"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"not-an-email\",\n  \"password\": \"short\",\n  \"fullName\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('Validation errors are reported per field', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.message).to.eql('Validation failed');",
+                  "    [\"email\", \"password\", \"fullName\"].forEach(f => pm.expect(body.errors, f).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('Returns user and both tokens', () => {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.user.email).to.eql(pm.collectionVariables.get('email'));",
+                  "    pm.expect(data.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.refreshToken).to.be.a('string').and.not.empty;",
+                  "});",
+                  "",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "pm.collectionVariables.set('authorization', data.tokenType + ' ' + data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - wrong password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"wrong-password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Invalid email or password\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - unknown email",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody-{{$timestamp}}@example.com\",\n  \"password\": \"{{password}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Invalid email or password\");",
+                  "});",
+                  "",
+                  "pm.test('Same message as a wrong password (no account enumeration)', () => {",
+                  "    pm.expect(pm.response.json().message).to.eql('Invalid email or password');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login - missing password",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Payments",
+      "item": [
+        {
+          "name": "Add payment - success",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 25.5,\n  \"currency\": \"USD\",\n  \"recipientEmail\": \"Jane.Doe@Example.com\",\n  \"description\": \"  Lunch  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 201', () => pm.response.to.have.status(201));",
+                  "",
+                  "pm.test('Returns the saved payment', () => {",
+                  "    const p = pm.response.json();",
+                  "    pm.expect(p.id).to.be.a('string').and.not.empty;",
+                  "    pm.expect(p.amount).to.eql(25.5);",
+                  "    pm.expect(p.currency).to.eql('USD');",
+                  "    pm.expect(p.description).to.eql('Lunch');",
+                  "    pm.expect(p.createdAt).to.be.a('string');",
+                  "    pm.collectionVariables.set('paymentId', p.id);",
+                  "});",
+                  "pm.test('Recipient email is normalized to lowercase', () => {",
+                  "    pm.expect(pm.response.json().recipientEmail).to.eql('jane.doe@example.com');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add payment - invalid body",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": -5,\n  \"currency\": \"usd\",\n  \"recipientEmail\": \"not-an-email\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('Validation errors are reported per field', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.message).to.eql('Validation failed');",
+                  "    [\"amount\", \"currency\", \"recipientEmail\"].forEach(f => pm.expect(body.errors, f).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add payment - missing fields",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('Validation errors are reported per field', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.message).to.eql('Validation failed');",
+                  "    [\"amount\", \"currency\", \"recipientEmail\"].forEach(f => pm.expect(body.errors, f).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add payment - no token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 25.5,\n  \"currency\": \"USD\",\n  \"recipientEmail\": \"Jane.Doe@Example.com\",\n  \"description\": \"  Lunch  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Unauthorized\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Add payment - invalid token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer not.a.valid-token"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": 25.5,\n  \"currency\": \"USD\",\n  \"recipientEmail\": \"Jane.Doe@Example.com\",\n  \"description\": \"  Lunch  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Unauthorized\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "History - page 1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Seed 11 more payments once, so history spans two pages (12 in total)",
+                  "if (!pm.collectionVariables.get('seeded')) {",
+                  "    pm.collectionVariables.set('seeded', 'true');",
+                  "    const base = pm.collectionVariables.get('baseUrl');",
+                  "    const auth = pm.collectionVariables.get('authorization');",
+                  "    for (let i = 1; i <= 11; i++) {",
+                  "        pm.sendRequest({",
+                  "            url: base + '/api/payments',",
+                  "            method: 'POST',",
+                  "            header: { 'Content-Type': 'application/json', 'Authorization': auth },",
+                  "            body: { mode: 'raw', raw: JSON.stringify({ amount: i, currency: 'EUR', recipientEmail: 'seed' + i + '@example.com' }) }",
+                  "        }, (err, res) => {",
+                  "            if (err || res.code !== 201) console.error('Seeding payment ' + i + ' failed', err || res.code);",
+                  "        });",
+                  "    }",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const page = pm.response.json();",
+                  "pm.test('Page has 10 items and a next cursor', () => {",
+                  "    pm.expect(page.items).to.have.lengthOf(10);",
+                  "    pm.expect(page.nextCursor).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('Items are newest first', () => {",
+                  "    const times = page.items.map(p => Date.parse(p.createdAt));",
+                  "    for (let i = 1; i < times.length; i++) pm.expect(times[i - 1]).to.be.at.least(times[i]);",
+                  "});",
+                  "pm.test('Items expose the payment fields only', () => {",
+                  "    page.items.forEach(p => pm.expect(p).to.have.all.keys('id', 'amount', 'currency', 'recipientEmail', 'description', 'createdAt'));",
+                  "});",
+                  "pm.collectionVariables.set('cursor', page.nextCursor);",
+                  "pm.collectionVariables.set('page1Ids', JSON.stringify(page.items.map(p => p.id)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "History - page 2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments?cursor={{cursor}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "{{cursor}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "const page = pm.response.json();",
+                  "const page1Ids = JSON.parse(pm.collectionVariables.get('page1Ids'));",
+                  "pm.test('Last page has the remaining 2 items and no next cursor', () => {",
+                  "    pm.expect(page.items).to.have.lengthOf(2);",
+                  "    pm.expect(page.nextCursor).to.eql(null);",
+                  "});",
+                  "pm.test('No payment appears on both pages', () => {",
+                  "    page.items.forEach(p => pm.expect(page1Ids).to.not.include(p.id));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "History - invalid cursor",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{authorization}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments?cursor=does-not-exist",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ],
+              "query": [
+                {
+                  "key": "cursor",
+                  "value": "does-not-exist"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('Error body has status 400 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(400);",
+                  "    pm.expect(body.message).to.eql(\"Invalid cursor\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "History - no token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "payments"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Unauthorized\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Token lifecycle",
+      "item": [
+        {
+          "name": "Refresh - success (rotates token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('oldRefreshToken', pm.collectionVariables.get('refreshToken'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "pm.test('Issues a new access and refresh token', () => {",
+                  "    const data = pm.response.json();",
+                  "    pm.expect(data.accessToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.refreshToken).to.be.a('string').and.not.empty;",
+                  "    pm.expect(data.refreshToken).to.not.eql(pm.collectionVariables.get('oldRefreshToken'));",
+                  "});",
+                  "",
+                  "const data = pm.response.json();",
+                  "pm.collectionVariables.set('accessToken', data.accessToken);",
+                  "pm.collectionVariables.set('authorization', data.tokenType + ' ' + data.accessToken);",
+                  "pm.collectionVariables.set('refreshToken', data.refreshToken);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - reuse of old token is rejected",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{oldRefreshToken}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Invalid refresh token\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - unknown token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"unknown-token\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 401', () => pm.response.to.have.status(401));",
+                  "",
+                  "pm.test('Error body has status 401 and message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.status).to.eql(401);",
+                  "    pm.expect(body.message).to.eql(\"Invalid refresh token\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh - missing token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "auth",
+                "refresh"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 400', () => pm.response.to.have.status(400));",
+                  "",
+                  "pm.test('Validation errors are reported per field', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.message).to.eql('Validation failed');",
+                  "    [\"refreshToken\"].forEach(f => pm.expect(body.errors, f).to.have.property(f));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "email",
+      "value": ""
+    },
+    {
+      "key": "password",
+      "value": "Password123"
+    },
+    {
+      "key": "authorization",
+      "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "refreshToken",
+      "value": ""
+    },
+    {
+      "key": "oldRefreshToken",
+      "value": ""
+    },
+    {
+      "key": "paymentId",
+      "value": ""
+    },
+    {
+      "key": "cursor",
+      "value": ""
+    },
+    {
+      "key": "page1Ids",
+      "value": "[]"
+    },
+    {
+      "key": "seeded",
+      "value": ""
+    }
+  ]
+}
