@@ -46,3 +46,8 @@ out/
 *service-account*.json
 firebase-*.json
 .env
+
+### JMeter output ###
+perf/*.jtl
+perf/report/
+jmeter.log
